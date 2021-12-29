@@ -1,7 +1,7 @@
 ## iteratörler
 
-Pointer like bir interface'e sahip dolayısı ile bunların sınıf türünden nesneler olması durumunda yine pointer gibi 
-kullanılmasını sağlayan operator overloading mekanizmaları vardır. Herbir iteratörün kategorisi olmak zorunda. Bu kategorilere göre iteratörlerin overload edilen mekanizmaları değişmektedir.
+İteratörler pointer-like bir interface'e sahiptir. Dolayısı ile bunların sınıf türünden nesneler olması durumunda yine pointer gibi 
+kullanılmasını sağlayan operator overloading mekanizmaları vardır. Herbir iteratörün kategorisi olmak zorundadır. Bu kategorilere göre iteratörlerin overload edilen mekanizmaları değişmektedir.
 
 #### İteratör Kategorileri
 - Output iterator
@@ -19,7 +19,7 @@ forward_list<string>::iterator::iterator_category;
 ...
 ```
 şeklinde öğrenebiliriz. 
-Buradaki nested type STL deki tanımlanmış empty classlardan biri.
+Buradaki nested type'lar STL deki tanımlanmış empty classlardan biri.
 Bunlar:
 ```c++
 struct output_iterator_tag;
