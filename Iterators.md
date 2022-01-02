@@ -291,6 +291,8 @@ Iteratorler üzeri̇nde i̇şlem yapan algori̇tmalar
  
  Bunlar iterator header fileda tanımlanan fonskiyon şablonları
  Diyelimki bir iteratörü artırmak istiyorsam bunun için += operator functionu kullanabilirim.
+
+### std::advance()
  ```c++
  int main()
  {
@@ -309,5 +311,202 @@ Iteratorler üzeri̇nde i̇şlem yapan algori̇tmalar
 	advance(iter,n);  // Eğer bu iter eğer random access iterator ise beg+=3 çalışacak ama random access iterator değilse beg n kez artırılması koduna dönüşecek
  }
  ```
- Bu durumlarda compile timeda kullanılan metaprogramming hileleri ile aslında iteratörü 3 kere artırmak yerine ```advance(iter,3);``` kullanılacak. Advance compile timeda kod seçecek eğer iterator random access iterator ise burada çalışan kod iter += 3 kodu olacak ama iter random access iterator değilse bir döngü içinde iteratörü n kez artıracak. Bu sayede ++ veya += operandı yapmak yerine compile timedaki seçilen kodla en düşük maliyetle uygun kod çalışacak.
+Bu durumlarda compile timeda kullanılan metaprogramming hileleri ile aslında iteratörü 3 kere artırmak yerine ```advance(iter,3);``` kullanılacak. Advance compile timeda kod seçecek eğer iterator random access iterator ise burada çalışan kod iter += 3 kodu olacak ama iter random access iterator değilse bir döngü içinde iteratörü n kez artıracak. Bu sayede ++ veya += operandı yapmak yerine compile timedaki seçilen kodla en düşük maliyetle uygun kod çalışacak.
 
+**Tag Dispatch** tekniğine uygun.
+
+ ```c++
+#include <iterator>
+namespace details
+{
+	template <typename Raniter, typename Distance>
+	void advance(Raniter& it , Distance n, std::random_access_iterator_tag)		
+	{
+		it += n;	
+	}
+	template <typename Biditer, typename Distance>
+	void advance(Biditer& it , Distance n, std::bidirectional_iterator_tag)
+	{
+		if(n>0)
+		{
+			while(n--)
+			{
+				++it;
+			}
+		}
+		else
+		{
+			while(n++)
+			{
+				--it;
+			}
+		}
+	}
+	template<typename Initer, typename Distance>
+	void advance(Initer &it, Distance n, std::input_iterator_tag)
+	{
+		while(n--){
+			++it;
+		}
+	}
+}
+template<typename Iter, typename Distance>
+void advance(Iter& it, Distance n)
+{
+	details::advance(it, n, typename Iter::iterator_category{});
+    /* 
+        compile timeda vector<int> iteratörü olduğunu anlaşılırsa mesela, iterator türü random access iterator tag olcak ve 1. ci overload seçilecek
+        Ama iter türü list<int> iteratör türü ise, iterator categori bidirectional olduğu için 2. overload seçilecek. Input ise 3.
+        normalde ...::iterator::iterator_category derdik ama zaten buraya gelen bir iterator oldupu için yani ...::iterator türden gönderildiği için
+        birdaha iterator yazmaya gerek yok.
+    */
+}
+
+int main()
+{
+	int a[10]{};
+	int *ptr = a;
+	advance(ptr,5); //SENTAKS HATASI. Neden bu int * türünden ve bunun iterator categorisi yok.
+    iterator_traits<vector<int>::iterator>::Iterator_category
+	advance(ptr,5); //SENTAKS HATASI. Neden bu int * türünden ve bunun iterator categorisi yok.
+}
+```
+iterator_traits pointer türleri için özelleştirilmiş.Dolayısıyla aslında iteratörün iterator categorisi demekle, iterator_traits in iterator açılımının iterator categorisi demek
+aynı şey. Neden Böyle birşey yapmışlar ? Iterator traits pointer türleri için özelleştirilmiş.
+
+```c++
+template <typename Iter, typename Distance>
+void advance(Iter& it , Distance n)
+{
+	advance(it, n, typename std::iterator_traits<Iter>::iterator_category{}); // Gerçek iterator türleri için aynı kategori ama pointer türleri için doğrudan pointer kullanılacak
+	// bu da özelliştirmede random access iterator tag verecek.
+}
+```
+Pointer hatasida böyle çözülmüş oluyor.
+iterator_traits iterator header file içerisinde bulunuyor.
+
+Aynı kodu compile time if kullanarak hiç tag dispatch uygulamadan gerçekleştirebiliriz?
+ ```c++
+#include <iterator>
+#include <type_traits>
+template <typename Iter, typename Dist>
+void advance(Iter& pos, Dist n)
+{
+	using cat = typename std::iterator_traits<Iter>::iterator_category; // bunu birden fazla yazacağımız için türeş ismi verildi.
+	if constexpr(std::is_same_v<cat,std::random_access_iterator_tag>)
+	{
+		pos += n;
+	}
+	else if constexpr(std::is_same_v<cat,std::bidirectional_iterator_tag>) is_same_v yerine is_same olsaydı en sona ::value gelecekti.
+	{
+		if(n>0)
+		{
+			while(n--)
+			{
+				++it;
+			}
+		}
+		else
+		{
+			while(n++)
+			{
+				--it;
+			}
+		}
+	}
+	else // input iterator tag
+	{
+		while(n--)
+			++pos;
+	}
+}
+```
+
+### std::distance()
+İki iterator veya pointer arasındaki farkı bulmak için kullanılır.
+Bunu compile timeda yaptırmak istersek arka planda tag dispatch veya if constexpr ile yapılabilir
+
+```c++
+#include <iterator>
+int main()
+{
+	vector<int>vec{1,2,3,4,5,6,7};
+	auto iter_x = vec.begin();
+	auto iter_y = vec.end();
+	
+	auto n = distance(iter_x, iter_y);
+	std::cout << "n = "<< n << "\n"; // 7
+
+    int a[]{1,2,3,4,5,6,7,8,9};
+	int* pf{a + 3}, *pe{a + 7};
+	std::cout << distance(df,pe)<< "\n"; // 4 
+
+    // distance mecburi senaryo
+
+	forward_list<int> mylist {1,2,3,4,5,6,7,8,9}; // ileride görülecek bir nedenden size func ı yok. Diğer tüm containerlarda var ama bunda yok.Verimli olması için eklenmemiş.
+	std::cout << distance(mylist.begin(),mylist.end()) << "\n"; // mylist in boyutunu veriyor.
+}
+```
+### std::next() and std::prev
+Advance pointerın veya iteratörün kendisini iletiyor yani referans yoluyla alıyor (call by reference). Fakat next bizden bir iterator alıyor ve o iteratörden n sonraki konumu return değeri olarak iletiyor. Call by value
+```next(iter, 5); //call by value```. 
+Bu iteratorden 5 sonraki konum. 2. parametresine argüman geçmezsek default olarak 1 alıyor.
+ ```next(iter); // bir sonraki konumu return ediyor```
+Prev de bunun tam tersi.
+```prev(iter ,3);```
+Bidirectional olmalı minimum. Bu konumların geçerli olması programcının sorumluluğunda. Exception throw etmiyorlar bu funclar.
+```prev(iter);```
+ birönceki konumu veriyor.
+
+```c++
+int main()
+{
+	vector <int> x {1,2,3,4,5,6,7};
+	auto iter{x.begin()};
+	auto iter_a = iter + 3; // 3 sonraki konum bu.Random access iterator bu
+	//vector değilde list olsaydı sentaks hatası olurdu ama çözebiliyoruyz tabi
+	auto iter_a = next(iter,3); //diyoruz. ITER DEĞIŞMIYOR HALEN AYNI DEĞERDE. ITER_A YA 3 SONRASI ATANDI !!!!!!
+	std::cout << *iter <<"\n";
+	//ilk ve son hariç hepsini yazdır
+	print(next(x.begin()), prev(x.end()));
+	//RANGE BASE FOR LOOPTA BİR BUG VAR.
+	*prev(e.end(),2) = -1;  // 1,2,3,4,5,-1,7}
+	print(x);
+}
+```
+
+### std::iter_swap()
+Iter swap doesnt swap iterators. İterator konumundaki 2 nesneyi swap ediyor.
+```c++
+template <typename Iter1, typename Iter2>
+void iter_swap(Iter1 it_x , Iter2 it_y)
+{
+	....
+}
+```
+```c++
+// İlk ile son elemanı değiştirelim mesela
+int main()
+{
+	list<int> x {1,2,3,4,5,6,7};
+	swap(x.front(), x.back()); //aslında böyle yapılabilir. Front ve back, ilk ve son öğeye referans alabiliyoruz.
+	swap(*x.begin(), *prev(e.end())); // end ten bir geri geldi. onu kullandi tabiki.
+	iter_swap(x.begin(), prev(x.end())); //DİKKAT!!! Asıl örnek bu.konumları değil, konumdaki nesneleri takas ediyor.
+	print(x);
+}
+```
+
+```c++
+// 2 değişkeni nasıl swap ederiz?
+int x = 10;
+int y = 45;
+swap(x,y); // referans semantiği ile
+iter_swap(&x,&y); // pointerlar iterator gibi kullanılabiliyorlar.
+```
+
+tuple sınıf şablonuyla call by value ilede swap edilebilir. 
+
+// TODO
+- ostream_iterator
+- istream_iterator
+- move_iterator
